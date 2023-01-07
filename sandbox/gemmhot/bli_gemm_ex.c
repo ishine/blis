@@ -137,6 +137,8 @@ void bli_gemm_ex
 		// Otherwise, the program would pop back to the original path of exec.
 	}
 
+	if ( BLIS_SUCCESS == bli_gemmsup( alpha, a, b, beta, c, cntx, rntm ) ) return;
+
 	// Initialize a local runtime with global settings if necessary. Note
 	// that in the case that a runtime is passed in, we make a local copy.
 	rntm_t rntm_l;
