@@ -654,6 +654,23 @@ void bli_dgemmsup2_rv_haswell_asm_6x8m
 #endif
     const int b_align = (((uint64_t)b % (4*8)) + rs_b0 % 4) == 0;
 
+    if ( n == 8 && k > 199 && pack_a + pack_b == 0 &&
+         ( rs_a0 << 28 | cs_a0 ) == ( 1 << 28 | 6 ) &&
+         b_align && rs_b0 == 8 )
+    {
+        for ( ; m > 0; m -= 6 )
+        {
+            bli_dgemm_haswell_asm_6x8
+            ( bli_min( m, 6 ), n, k,
+              alpha, a, b, beta,
+              c, rs_c0, cs_c0,
+              data, cntx );
+            a += bls_aux_ps_ext( data );
+            c += 6 * rs_c0;
+        }
+        return ;
+    }
+
     switch ( pack_a << 13 | b_align << 12 | n ) {
 #define EXPAND_CASE(N,PACKA_C,BAlign_C,PACKA,BAlign) \
         case ( PACKA_C << 13 | BAlign_C << 12 | N ): \

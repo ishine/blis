@@ -763,6 +763,23 @@ void bli_dgemmsup2_rv_haswell_asm_6x8n
             cs_c0 == 1 );
 #endif
 
+    if ( m == 6 && k > 199 && pack_a + pack_b == 0 &&
+         ( rs_a0 << 28 | cs_a0 ) == ( 1 << 28 | 6 ) &&
+         b_align && rs_b0 == 8 )
+    {
+        for ( ; n > 0; n -= 8 )
+        {
+            bli_dgemm_haswell_asm_6x8
+            ( 6, bli_min( n, 8 ), k,
+              alpha, a, b, beta,
+              c, rs_c0, cs_c0,
+              data, cntx );
+            b += bls_aux_ps_ext( data );
+            c += 8 * cs_c0;
+        }
+        return ;
+    }
+
     switch ( pack_b << 13 | b_align << 12 | m ) {
 #define EXPAND_CASE(M,PACKB_C,BAlign_C,PACKB,BAlign) \
         case ( PACKB_C << 13 | BAlign_C << 12 | M ): \
