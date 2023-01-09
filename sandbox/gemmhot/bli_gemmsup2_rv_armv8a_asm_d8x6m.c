@@ -536,7 +536,7 @@ BLIS_INLINE void bli_dgemmsup2_rv_armv8a_asm_8x ## N ## m_ ## PACKA \
     const void *next_a = bli_auxinfo_next_a( data ); \
     const void *next_b = bli_auxinfo_next_b( data ); \
 \
-    bli_auxinfo_set_next_b( b_p, data ); \
+    bli_auxinfo_set_next_b( b, data ); \
     bls_aux_set_ls_ext_next( cs_a0, data ); \
 \
     if ( m >= 8 && pack_b ) \
@@ -563,6 +563,7 @@ BLIS_INLINE void bli_dgemmsup2_rv_armv8a_asm_8x ## N ## m_ ## PACKA \
         c += 8 * rs_c0; \
         b = b_p; \
         rs_b0 = 6; \
+        bli_auxinfo_set_next_b( b_p, data ); \
     } \
 \
     for ( ; m >= 8; m -= 8 ) \
