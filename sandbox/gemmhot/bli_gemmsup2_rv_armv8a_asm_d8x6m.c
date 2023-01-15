@@ -494,7 +494,7 @@ GENDEF(7,nopack,nopack)
 #undef GENDEF
 
 // Other sizes.
-#include "bli_gemmsup2_rv_armv8a_asm_d8x6m.cin"
+#include "bli_gemmsup2_rv_armv8a_asm_d8x6m_noidx.cin"
 #include "bli_gemmsup2_rv_armv8a_asm_d8x5m.cin"
 
 static double zero = 0.0;
