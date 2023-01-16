@@ -456,6 +456,7 @@ GENDEF(7,nopack,nopack)
 #undef GENDEF
 
 // Other sizes.
+#include "bli_gemmsup2_rcr_armv8a_asm_d8x6m.cin"
 #include "bli_gemmsup2_cv_armv8a_asm_d8x6m.cin"
 #include "bli_gemmsup2_cv_armv8a_asm_d8x5m.cin"
 
@@ -512,12 +513,20 @@ BLIS_INLINE void bli_dgemmsup2_cv_armv8a_asm_8x ## N ## m_ ## PACKA \
         else \
             bli_auxinfo_set_next_a( a + bli_max(ps_a, 128), data ); \
 \
-        bli_dgemmsup2_cv_armv8a_asm_8x ## N ##_ ## PACKA ## _pack \
-        ( 8, N, k, alpha, \
-          a, rs_a0, cs_a0, \
-          b, rs_b0, cs_b0, beta, \
-          c, rs_c0, cs_c0, \
-          data, cntx, a_p, b_p ); \
+        if ( cs_b0 == 1 && N == 6 ) \
+            bli_dgemmsup2_rcr_armv8a_asm_8x6_ ## PACKA ## _pack \
+            ( 8, N, k, alpha, \
+              a, rs_a0, cs_a0, \
+              b, rs_b0, cs_b0, beta, \
+              c, rs_c0, cs_c0, \
+              data, cntx, a_p, b_p ); \
+        else \
+            bli_dgemmsup2_cv_armv8a_asm_8x ## N ##_ ## PACKA ## _pack \
+            ( 8, N, k, alpha, \
+              a, rs_a0, cs_a0, \
+              b, rs_b0, cs_b0, beta, \
+              c, rs_c0, cs_c0, \
+              data, cntx, a_p, b_p ); \
 \
         m -= 8; \
         a += ps_a; \
@@ -545,6 +554,13 @@ BLIS_INLINE void bli_dgemmsup2_cv_armv8a_asm_8x ## N ## m_ ## PACKA \
             bli_dgemm_armv8a_asm_8x6r \
             ( 8, N, k, alpha, a, b, beta, \
               c, rs_c0, cs_c0, data, cntx ); \
+        else if ( cs_b0 == 1 && N == 6 ) \
+            bli_dgemmsup2_rcr_armv8a_asm_8x6_ ## PACKA ## _nopack \
+            ( 8, N, k, alpha, \
+              a, rs_a0, cs_a0, \
+              b, rs_b0, cs_b0, beta, \
+              c, rs_c0, cs_c0, \
+              data, cntx, a_p, b_p ); \
         else \
             bli_dgemmsup2_cv_armv8a_asm_8x ## N ##_ ## PACKA ## _nopack \
             ( 8, N, k, alpha, \
