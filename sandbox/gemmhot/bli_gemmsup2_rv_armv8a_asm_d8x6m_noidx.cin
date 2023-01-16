@@ -228,7 +228,8 @@ BEQ(DWRITE_MEM_PREP_ ## PACKA ## _ ## PACKB) \
 " ldr             q29, [%[b], #16*1]              \n\t" \
 " ldr             q30, [%[b], #16*2]              \n\t" \
 " add             %[b], %[b], %[rs_b]             \n\t" \
-PRFA_LOC DGEMM_8X6_MKER_NOIDX_LOOP_LOC(fmul,28,29,30,31,noload,load,PACKA,PACKB) \
+" sub             %[k_left], %[k_left], #1        \n\t" \
+PRFA_LOC DGEMM_8X6_MKER_NOIDX_LOOP_LOC(fmla,28,29,30,31,noload,noload,PACKA,PACKB) \
 BRANCH(DK_LEFT_LOOP_ ## PACKA ## _ ## PACKB) \
 \
 /* Initial loop without microkernels. */ \
@@ -243,6 +244,7 @@ BEQ(DCLEAR_CCOLS_ ## PACKA ## _ ## PACKB) \
 " ldr             q29, [%[b], #16*1]              \n\t" \
 " ldr             q30, [%[b], #16*2]              \n\t" \
 " add             %[b], %[b], %[rs_b]             \n\t" \
+" sub             %[k_left], %[k_left], #1        \n\t" \
 PRFA_LOC DGEMM_8X6_MKER_NOIDX_LOOP_LOC(fmul,28,29,30,31,noload,load,PACKA,PACKB) \
 BRANCH(DK_LEFT_LOOP_ ## PACKA ## _ ## PACKB) \
 \
