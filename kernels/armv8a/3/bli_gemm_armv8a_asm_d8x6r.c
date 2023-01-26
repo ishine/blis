@@ -221,7 +221,7 @@ BEQ(SCLEAR_CCOLS)
 " ldr             q24, [x0, #16*0]                \n\t" // Load A.
 " ldr             q25, [x0, #16*1]                \n\t"
 " ldr             q26, [x0, #16*2]                \n\t"
-" add             x0, x0, x2                      \n\t"
+" add             x0, x0, x2                      \n\t" PRFMA(x0,16)
 " ldr             q27, [x0, #16*0]                \n\t"
 "                                                 \n\t"
 PRFMC_FWD(x9,x6,32) // Prefetch C 07/12.
@@ -254,12 +254,12 @@ BEQ(SK_LEFT_LOOP)
  "add             x1, x1, x3                      \n\t"
 // Start microkernel loop.
 LABEL(SK_MKER_LOOP)
-SGEMM_12X8_MKER_LOOP_PLAIN_LOC_FWD(24,25,26,28,29)
-SGEMM_12X8_MKER_LOOP_PLAIN_LOC_FWD(27,24,25,30,31)
+PRFMA(x0,80) SGEMM_12X8_MKER_LOOP_PLAIN_LOC_FWD(24,25,26,28,29)
+PRFMA(x0,96) SGEMM_12X8_MKER_LOOP_PLAIN_LOC_FWD(27,24,25,30,31)
 "                                                 \n\t" // Decrease counter before final replica.
 " subs            x4, x4, #1                      \n\t" // Branch early to avoid reading excess mem.
 BEQ(SFIN_MKER_LOOP)
-SGEMM_12X8_MKER_LOOP_PLAIN_LOC_FWD(26,27,24,28,29)
+PRFMA(x0,112) SGEMM_12X8_MKER_LOOP_PLAIN_LOC_FWD(26,27,24,28,29)
 SGEMM_12X8_MKER_LOOP_PLAIN_LOC_FWD(25,26,27,30,31)
 BRANCH(SK_MKER_LOOP)
 //
