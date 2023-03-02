@@ -511,7 +511,7 @@ BLIS_INLINE void bli_dgemmsup2_cv_armv8a_asm_8x ## N ## m_ ## PACKA \
             bls_aux_set_ls_ext_next( cs_a_next, data ); \
         } \
         else \
-            bli_auxinfo_set_next_a( a + bli_max(ps_a, 128), data ); \
+            bli_auxinfo_set_next_a( a + bli_min(ps_a, 128), data ); \
 \
         if ( cs_b0 == 1 && N == 6 ) \
             bli_dgemmsup2_rcr_armv8a_asm_8x6_ ## PACKA ## _pack \
@@ -547,7 +547,7 @@ BLIS_INLINE void bli_dgemmsup2_cv_armv8a_asm_8x ## N ## m_ ## PACKA \
             bls_aux_set_ls_ext_next( cs_a_next, data ); \
         } \
         else \
-            bli_auxinfo_set_next_a( a + bli_max(ps_a, 128), data ); \
+            bli_auxinfo_set_next_a( a + bli_min(ps_a, 128), data ); \
 \
         /* Optionally call bulk kernel. */ \
         if ( a == a_p && b == b_p && N > 3 ) \
