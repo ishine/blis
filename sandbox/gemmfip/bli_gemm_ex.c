@@ -103,8 +103,7 @@ void bli_gemm_ex
 		milliker = rs_a == 1 ? bli_dgemmsup2_cv_armv8a_asm_8x6m :
 			bli_dgemmsup2_rv_armv8a_asm_8x6m; mr = 8; nr = 6;
 #else
-		// TODO: Use reference kernels.
-#error "This architecture is not supported yet."
+		milliker = bli_dgemmsup2_ref; mr = mr_ref; nr = nr_ref;
 #endif
 
 		rntm_t rntm_l;

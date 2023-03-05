@@ -1,5 +1,15 @@
 #include "blis.h"
 
+#ifdef FORCE_GENERIC
+#undef __x86_64__
+#undef _M_X64
+#undef __i386
+#undef _M_IX86
+#undef __aarch64__
+#undef __arm__
+#undef _M_ARM
+#undef _ARCH_PPC
+#endif
 
 #ifdef __cplusplus
 extern "C" {
@@ -31,6 +41,18 @@ void funcname \
      double *restrict b_p, int pack_b \
     )
 
+////////////////////
+// Generic configs
+////////////////////
+
+SUPKER_DECL(bli_dgemmsup2_ref);
+typedef typeof(&bli_dgemmsup2_ref) ukr_dgemm_sup_t;
+const static dim_t mr_ref = 8, nr_ref = 8;
+
+////////////////////
+// Arch-specific
+////////////////////
+
 #if defined(__x86_64__) || defined(_M_X64) || defined(__i386) || defined(_M_IX86)
 
 SUPKER_DECL(bli_dgemmsup2_rv_haswell_asm_6x8m);
@@ -38,7 +60,7 @@ SUPKER_DECL(bli_dgemmsup2_rv_haswell_asm_6x8n);
 SUPKER_DECL(bli_dgemmsup2_cv_haswell_asm_8x6m);
 typedef typeof(&bli_dpackm_haswell_asm_8xk) l1mukr_t;
 typedef typeof(&bli_dgemm_haswell_asm_6x8) ukr_dgemm_bulk_t;
-typedef typeof(&bli_dgemmsup2_rv_haswell_asm_6x8m) ukr_dgemm_sup_t;
+#define HAS_BULK_KER
 
 #elif defined(__aarch64__) || defined(__arm__) || defined(_M_ARM) || defined(_ARCH_PPC)
 
@@ -46,9 +68,14 @@ SUPKER_DECL(bli_dgemmsup2_rv_armv8a_asm_8x6m);
 SUPKER_DECL(bli_dgemmsup2_cv_armv8a_asm_8x6m);
 typedef typeof(&bli_dpackm_armv8a_int_8xk) l1mukr_t;
 typedef typeof(&bli_dgemm_armv8a_asm_8x6r) ukr_dgemm_bulk_t;
-typedef typeof(&bli_dgemmsup2_rv_armv8a_asm_8x6m) ukr_dgemm_sup_t;
+#define HAS_BULK_KER
 
 #endif
+
+////////////////////
+// End config
+////////////////////
+
 
 void bls_dgemm
     (

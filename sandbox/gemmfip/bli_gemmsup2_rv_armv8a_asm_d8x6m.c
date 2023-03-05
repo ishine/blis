@@ -1,8 +1,7 @@
-#if defined(__aarch64__) || defined(__arm__) || defined(_M_ARM) || defined(_ARCH_PPC)
-
 #include "blis.h"
 #include <assert.h>
 
+#if defined(__aarch64__) || defined(__arm__) || defined(_M_ARM) || defined(_ARCH_PPC)
 
 // Label locality & misc.
 #include "armv8a_asm_utils.h"

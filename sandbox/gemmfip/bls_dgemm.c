@@ -92,6 +92,7 @@ void bls_dgemm
                 inc_t rs_a_uker, cs_a_uker;
                 inc_t rs_b_uker, cs_b_uker;
 
+                #ifdef HAS_BULK_KER
                 if ( bli_rntm_pack_b( rntm ) && ic_offset == 0 )
                 {
                     // Ahead-of-time packing case.
@@ -115,6 +116,7 @@ void bls_dgemm
                             );
                     }
                 }
+                #endif
 
                 for ( dim_t jr = 0; jr < num_jr && n0 - jc_offset - jr * nr > 0; ++jr ) {
                     double *c_l1 = c_l2 + jr * nr * cs_c;
@@ -134,6 +136,7 @@ void bls_dgemm
                         cs_b_uker = cs_b;
                     }
 
+                    #ifdef HAS_BULK_KER
                     if ( bli_rntm_pack_a( rntm ) && jr == 0 )
                     {
                         // Ahead-of-time packing case.
@@ -158,6 +161,7 @@ void bls_dgemm
                                 );
                         }
                     }
+                    #endif
 
                     // Set next_a.
                     if ( jr + 1 < num_jr && jr_offset + n_uker < n0 ) {
