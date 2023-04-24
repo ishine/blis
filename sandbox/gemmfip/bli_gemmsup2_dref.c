@@ -91,65 +91,65 @@ void bli_dgemmsup2_ref
 
   do
   {
-  for ( ; m != 0; )
-  {
-    dim_t m_loc = bli_min( m, mr_ref );
-    if ( m <= mr_ref && !ares_offset )
+    for ( ; m != 0; )
     {
-      bli_auxinfo_set_next_a( next_a, data );
-      bli_auxinfo_set_next_b( next_b, data );
-      bls_aux_set_ls_ext_next( cs_a_next, data );
-    }
-    else
-      bli_auxinfo_set_next_a( a + bli_min(ps_a, 128 /* arch-dependent. don't prefetch too far away */), data );
+      dim_t m_loc = bli_min( m, mr_ref );
+      if ( m <= mr_ref && !ares_offset )
+      {
+        bli_auxinfo_set_next_a( next_a, data );
+        bli_auxinfo_set_next_b( next_b, data );
+        bls_aux_set_ls_ext_next( cs_a_next, data );
+      }
+      else
+        bli_auxinfo_set_next_a( a + bli_min(ps_a, 128 /* arch-dependent. don't prefetch too far away */), data );
 
-    // Inline dispatch from millikernel to microkernel.
-    if ( *semaphore )
-      bli_dgemmsup2_ref_microkernel
-        ( m_loc, n, k,
-          alpha,
-          a_p, 1, mr_ref,
-          b, rs_b0, cs_b0,
-          beta,
-          c, rs_c0, cs_c0,
-          data,
-          cntx,
-          a_p, 0,
-          b_p, pack_b );
-    else
-      bli_dgemmsup2_ref_microkernel
-        ( m_loc, n, k,
-          alpha,
-          a, rs_a0, cs_a0,
-          b, rs_b0, cs_b0,
-          beta,
-          c, rs_c0, cs_c0,
-          data,
-          cntx,
-          a_p, pack_a,
-          b_p, pack_b );
-    *semaphore = TRUE;
+      // Inline dispatch from millikernel to microkernel.
+      if ( *semaphore )
+        bli_dgemmsup2_ref_microkernel
+          ( m_loc, n, k,
+            alpha,
+            a_p, 1, mr_ref,
+            b, rs_b0, cs_b0,
+            beta,
+            c, rs_c0, cs_c0,
+            data,
+            cntx,
+            a_p, 0,
+            b_p, pack_b );
+      else
+        bli_dgemmsup2_ref_microkernel
+          ( m_loc, n, k,
+            alpha,
+            a, rs_a0, cs_a0,
+            b, rs_b0, cs_b0,
+            beta,
+            c, rs_c0, cs_c0,
+            data,
+            cntx,
+            a_p, pack_a,
+            b_p, pack_b );
+      *semaphore = TRUE;
 
-    m -= m_loc;
-    a += ps_a;
-    a_p += ps_a_p;
-    c += m_loc * rs_c0;
-    semaphore++;
-    if ( pack_b ) {
-      pack_b = 0;
-      // Start reusing the packed B.
-      // To avoid RAW hazards on some chips, one MAY want to delay a few steps before reuse.
-      b = b_p;
-      rs_b0 = nr_ref;
-      cs_b0 = 1;
-      bli_auxinfo_set_next_b( b_p, data );
+      m -= m_loc;
+      a += ps_a;
+      a_p += ps_a_p;
+      c += m_loc * rs_c0;
+      semaphore++;
+      if ( pack_b ) {
+        pack_b = 0;
+        // Start reusing the packed B.
+        // To avoid RAW hazards on some chips, one MAY want to delay a few steps before reuse.
+        b = b_p;
+        rs_b0 = nr_ref;
+        cs_b0 = 1;
+        bli_auxinfo_set_next_b( b_p, data );
+      }
     }
-  }
-  m   = mr_ref * ares_offset;
-  a   = a_;
-  a_p = a_p_;
-  c   = c_;
-  semaphore = semaphore_;
-  ares_offset = 0;
+    m   = mr_ref * ares_offset;
+    a   = a_;
+    a_p = a_p_;
+    c   = c_;
+    semaphore = semaphore_;
+    ares_offset = 0;
   } while ( m );
 }
