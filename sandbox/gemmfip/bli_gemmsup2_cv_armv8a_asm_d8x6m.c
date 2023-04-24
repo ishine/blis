@@ -634,7 +634,9 @@ void bli_dgemmsup2_cv_armv8a_asm_8x6m
      auxinfo_t       *data,
      cntx_t          *cntx,
      double *restrict a_p, int pack_a,
-     double *restrict b_p, int pack_b
+     double *restrict b_p, int pack_b,
+     inc_t            ares_offset,
+     bool            *semaphore
     )
 {
 #ifdef DEBUG

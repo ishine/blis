@@ -83,8 +83,8 @@ err_t bls_dgemm
         // TODO: There should be a one-time warning like "Specified ... but used ..."
         return BLIS_SUCCESS;
 
-    bli_packm_sup_init_mem( has_pack_b, BLIS_BUFFER_FOR_B_PANEL, BLIS_DOUBLE, nc, kc_max, nr, thread_pb );
-    bli_packm_sup_init_mem( has_pack_a, BLIS_BUFFER_FOR_A_BLOCK, BLIS_DOUBLE, mc, kc_max, mr, thread_pa );
+    bli_packm_sup_init_mem( has_pack_b, BLIS_BUFFER_FOR_B_PANEL, BLIS_DOUBLE, nc, kc_max,     nr, thread_pb );
+    bli_packm_sup_init_mem( has_pack_a, BLIS_BUFFER_FOR_A_BLOCK, BLIS_DOUBLE, mc, kc_max + 1, mr, thread_pa );
 
     mem_t* mem_b = bli_thrinfo_mem( thread_pb );
     mem_t* mem_a = bli_thrinfo_mem( thread_pa );
@@ -108,6 +108,12 @@ err_t bls_dgemm
             // Determine whether to use k_uker * ?r or kc * ?r as the packing stride.
             // On CPU basically k_uker * ?r is better since it ensures equential HW prefetching.
             dim_t k_ps = k_uker;
+
+            // At the end of the packing space is a semaphore for A-restreaming.
+            bool *semaphore = ( bool* )( a_panels + mr * num_ir * kc_max );
+            if ( !thread_pa->thread_id )
+                memset( semaphore, 0, sizeof( bool ) * num_ir );
+            bli_thrinfo_barrier( thread_pa );
 
             for ( dim_t ic_offset = 0; ic_offset < m0; ic_offset += mc ) {
                 double *a_l2 = a_l3 + ic_offset * rs_a;
@@ -143,9 +149,14 @@ err_t bls_dgemm
                 }
                 #endif
 
-                dim_t jr_start, jr_end;
-                dim_t num_jr_loc = bli_min( num_jr, ( n0 - jc_offset + nr - 1 ) / nr );
-                bli_thread_range_sub( thread_jr, num_jr_loc, 1, FALSE, &jr_start, &jr_end );
+                // Partitions JR & A-restreaming.
+                // A-restream allocates packing workload w.r.t. IR to each JR worker.
+                dim_t jr_start,    jr_end;
+                dim_t ares_offset, ares_dummy;
+                const dim_t num_jr_loc = bli_min( num_jr, ( n0 - jc_offset + nr - 1 ) / nr );
+                const dim_t num_ir_loc = bli_min( num_ir, ( m0 - ic_offset + mr - 1 ) / mr );
+                bli_thread_range_sub( thread_jr, num_jr_loc, 1, FALSE, &jr_start,    &jr_end     );
+                bli_thread_range_sub( thread_jr, num_ir_loc, 1, FALSE, &ares_offset, &ares_dummy );
 
                 for ( dim_t jr = jr_start; jr < jr_end; ++jr ) {
                     double *c_l1 = c_l2 + jr * nr * cs_c;
@@ -233,7 +244,8 @@ err_t bls_dgemm
                     dim_t m_mker = min_( m0 - ic_offset, mc );
                     bls_aux_set_ps_ext_p( mr * k_ps, &data ); // ps_a_p.
 
-                    // The A-repack strategy.
+                    // Regardless of whether A-repack or A-restream is deployed,
+                    // one only needs to consider packing in the first millikernel.
                     if ( bli_rntm_pack_a( rntm ) || ( jr > jr_start && has_pack_a ) ) {
                         a_uker = a_panels;
                         rs_a_uker = 1;
@@ -256,13 +268,15 @@ err_t bls_dgemm
                          c_l1, rs_c, cs_c,
                          &data, cntx,
                          a_panels, a_uker != a_panels && jr_offset + n_uker < n0 && has_pack_a,
-                         b_p,      b_uker != b_p                                 && has_pack_b
+                         b_p,      b_uker != b_p                                 && has_pack_b,
+                         ares_offset, semaphore
                         );
 
                 }
             }
             beta = &one;
             lc_offset += k_uker;
+            bli_thrinfo_barrier( thread_pa );
         }
     }
     return BLIS_SUCCESS;

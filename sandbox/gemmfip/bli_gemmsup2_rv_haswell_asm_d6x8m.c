@@ -643,7 +643,9 @@ void bli_dgemmsup2_rv_haswell_asm_6x8m
      auxinfo_t       *data,
      cntx_t          *cntx,
      double *restrict a_p, int pack_a,
-     double *restrict b_p, int pack_b
+     double *restrict b_p, int pack_b,
+     inc_t            ares_offset,
+     bool            *semaphore
     )
 {
 #ifdef DEBUG

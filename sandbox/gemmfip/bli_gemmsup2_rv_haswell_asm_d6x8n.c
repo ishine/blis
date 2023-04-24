@@ -751,7 +751,9 @@ void bli_dgemmsup2_rv_haswell_asm_6x8n
      auxinfo_t       *data,
      cntx_t          *cntx,
      double *restrict a_p, int pack_a,
-     double *restrict b_p, int pack_b
+     double *restrict b_p, int pack_b,
+     inc_t            ares_offset,
+     bool            *semaphore
     )
 {
     const inc_t ps_b0 = bls_aux_ps_ext( data ); // Panel stride for extending dim.
@@ -827,7 +829,9 @@ void bli_dgemmsup2_cv_haswell_asm_8x6m
      auxinfo_t       *data,
      cntx_t          *cntx,
      double *restrict a_p, int pack_a,
-     double *restrict b_p, int pack_b
+     double *restrict b_p, int pack_b,
+     inc_t            ares_offset,
+     bool            *semaphore
     )
 {
     bli_dgemmsup2_rv_haswell_asm_6x8n
