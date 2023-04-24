@@ -77,6 +77,12 @@ err_t bls_dgemm
     thrinfo_t* restrict thread_pa = bli_thrinfo_sub_node( thread_ic );
     thrinfo_t* restrict thread_jr = bli_thrinfo_sub_node( thread_pa );
 
+    // Limited threading capability. Discard non-master JC through PA.
+    if ( thread_jc->work_id || thread_pc->work_id || thread_pb->work_id || 
+         thread_ic->work_id || thread_pa->work_id )
+        // TODO: There should be a one-time warning like "Specified ... but used ..."
+        return BLIS_SUCCESS;
+
     bli_packm_sup_init_mem( has_pack_b, BLIS_BUFFER_FOR_B_PANEL, BLIS_DOUBLE, nc, kc_max, nr, thread_pb );
     bli_packm_sup_init_mem( has_pack_a, BLIS_BUFFER_FOR_A_BLOCK, BLIS_DOUBLE, mc, kc_max, mr, thread_pa );
 
@@ -137,13 +143,18 @@ err_t bls_dgemm
                 }
                 #endif
 
-                for ( dim_t jr = 0; jr < num_jr && n0 - jc_offset - jr * nr > 0; ++jr ) {
+                dim_t jr_start, jr_end;
+                dim_t num_jr_loc = bli_min( num_jr, ( n0 - jc_offset + nr - 1 ) / nr );
+                bli_thread_range_sub( thread_jr, num_jr_loc, 1, FALSE, &jr_start, &jr_end );
+
+                for ( dim_t jr = jr_start; jr < jr_end; ++jr ) {
                     double *c_l1 = c_l2 + jr * nr * cs_c;
                     double *b_l1 = b_l3 + jr * nr * cs_b;;
                     double *b_p = b_panels + nr * k_ps * jr;
                     dim_t jr_offset = jc_offset + jr * nr;
                     dim_t n_uker = min_(n0 - jr_offset, nr);
 
+                    // The B-repack strategy.
                     if ( bli_rntm_pack_b( rntm ) || ( ic_offset > 0 && has_pack_b ) ) {
                         // Reuse packed b.
                         b_uker = b_p;
@@ -183,6 +194,7 @@ err_t bls_dgemm
                     #endif
 
                     // Set next_a.
+                    // TODO: Consider threaded situation?
                     if ( jr + 1 < num_jr && jr_offset + n_uker < n0 ) {
                         if ( has_pack_a ) {
                             // Still using the already-packed a panels.
@@ -221,7 +233,8 @@ err_t bls_dgemm
                     dim_t m_mker = min_( m0 - ic_offset, mc );
                     bls_aux_set_ps_ext_p( mr * k_ps, &data ); // ps_a_p.
 
-                    if ( bli_rntm_pack_a( rntm ) || ( jr > 0 && has_pack_a ) ) {
+                    // The A-repack strategy.
+                    if ( bli_rntm_pack_a( rntm ) || ( jr > jr_start && has_pack_a ) ) {
                         a_uker = a_panels;
                         rs_a_uker = 1;
                         cs_a_uker = mr;
@@ -252,5 +265,6 @@ err_t bls_dgemm
             lc_offset += k_uker;
         }
     }
+    return BLIS_SUCCESS;
 }
 

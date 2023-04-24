@@ -110,8 +110,6 @@ void bli_gemm_ex
 
 			// Initialize runtime vars.
 			bli_rntm_init_from_global( &rntm_l );
-			// Override threading settings.
-			bli_rntm_set_thread_impl_only( BLIS_SINGLE, &rntm_l );
 
 			// Parse and interpret the contents of the rntm_t object to properly
 			// set the ways of parallelism for each loop, and then make any
