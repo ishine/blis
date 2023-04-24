@@ -1,6 +1,23 @@
 #include "blis.h"
 #include <assert.h>
 
+
+BLIS_INLINE void bli_handle_trans( obj_t* mat )
+{
+	if ( bli_obj_has_trans( mat ) )
+	{
+		dim_t  m = bli_obj_length    ( mat );
+		dim_t  n = bli_obj_width     ( mat );
+		inc_t rs = bli_obj_row_stride( mat );
+		inc_t cs = bli_obj_col_stride( mat );
+		bli_obj_set_length    (  n, mat );
+		bli_obj_set_width     (  m, mat );
+		bli_obj_set_row_stride( cs, mat );
+		bli_obj_set_col_stride( rs, mat );
+		bli_obj_toggle_trans  (     mat );
+	}
+}
+
 void bli_gemm_ex
      (
        const obj_t*  alpha,
@@ -55,44 +72,15 @@ void bli_gemm_ex
 			return ;
 		}
 
-		dim_t m, n, k;
-		inc_t rs_a, cs_a, rs_b, cs_b, rs_c, cs_c;
-		if ( bli_obj_has_notrans( a ) )
-		{
-			k = bli_obj_dim( BLIS_N, a );
-			rs_a = bli_obj_row_stride( a );
-			cs_a = bli_obj_col_stride( a );
-		}
-		else
-		{
-			k = bli_obj_dim( BLIS_M, a );
-			rs_a = bli_obj_col_stride( a );
-			cs_a = bli_obj_row_stride( a );
-		}
-		if ( bli_obj_has_notrans( b ) )
-		{
-			rs_b = bli_obj_row_stride( b );
-			cs_b = bli_obj_col_stride( b );
-		}
-		else
-		{
-			rs_b = bli_obj_col_stride( b );
-			cs_b = bli_obj_row_stride( b );
-		}
-		if ( bli_obj_has_notrans( c ) )
-		{
-			m = bli_obj_dim( BLIS_M, c );
-			n = bli_obj_dim( BLIS_N, c );
-			rs_c = bli_obj_row_stride( c );
-			cs_c = bli_obj_col_stride( c );
-		}
-		else
-		{
-			m = bli_obj_dim( BLIS_N, c );
-			n = bli_obj_dim( BLIS_M, c );
-			rs_c = bli_obj_col_stride( c );
-			cs_c = bli_obj_row_stride( c );
-		}
+		obj_t a_loc, b_loc, c_loc;
+		bli_obj_alias_to( a, &a_loc );
+		bli_obj_alias_to( b, &b_loc );
+		bli_obj_alias_to( c, &c_loc );
+		bli_handle_trans( &a_loc );
+		bli_handle_trans( &b_loc );
+		bli_handle_trans( &c_loc );
+		const inc_t rs_a = bli_obj_row_stride( &a_loc );
+		const inc_t cs_b = bli_obj_col_stride( &b_loc );
 
 		dim_t mr, nr;
 		ukr_dgemm_sup_t milliker;
@@ -105,6 +93,10 @@ void bli_gemm_ex
 #else
 		milliker = bli_dgemmsup2_ref; mr = mr_ref; nr = nr_ref;
 #endif
+		// Write mr, nr, and milliker to objects' customizable fields of a, b, and c.
+		a_loc.ker_params = ( void * )mr;
+		b_loc.ker_params = ( void * )nr;
+		c_loc.ker_params = ( void * )milliker;
 
 		rntm_t rntm_l;
 		if ( rs_a == 1 || cs_b == 1 )
@@ -112,23 +104,39 @@ void bli_gemm_ex
 			// Query the context for block size & packing kernels.
 			if ( cntx == NULL ) cntx = bli_gks_query_cntx();
 			
-			// Initialize packing env vars.
-			bli_pack_init_rntm_from_env( &rntm_l );
-
 			// Check the operands.
 			if ( bli_error_checking_is_enabled() )
 				bli_gemm_check( alpha, a, b, beta, c, cntx );
 
-			bls_dgemm
+			// Initialize runtime vars.
+			bli_rntm_init_from_global( &rntm_l );
+			// Override threading settings.
+			bli_rntm_set_thread_impl_only( BLIS_SINGLE, &rntm_l );
+
+			// Parse and interpret the contents of the rntm_t object to properly
+			// set the ways of parallelism for each loop, and then make any
+			// additional modifications necessary for the current operation.
+			bli_rntm_set_ways_for_op
 			(
-				m, n, k,
-				bli_obj_buffer( alpha ),
-				bli_obj_buffer( a ), rs_a, cs_a,
-				bli_obj_buffer( b ), rs_b, cs_b,
-				bli_obj_buffer( beta ),
-				bli_obj_buffer( c ), rs_c, cs_c,
-				cntx, &rntm_l,
-				milliker, mr, nr
+				BLIS_GEMM,
+				BLIS_LEFT, // ignored for gemm/hemm/symm
+				bli_obj_length( &c_loc ),
+				bli_obj_width ( &c_loc ),
+				bli_obj_width ( &a_loc ),
+				&rntm_l
+			);
+
+			bli_l3_sup_thread_decorator
+			(
+				bls_dgemm, // shall become general-purpose later
+				BLIS_GEMM, // operation family id
+				alpha,
+				&a_loc,
+				&b_loc,
+				beta,
+				&c_loc,
+				cntx,
+				&rntm_l
 			);
 			return ;
 		}

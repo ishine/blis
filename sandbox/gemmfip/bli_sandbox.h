@@ -77,20 +77,16 @@ typedef typeof(&bli_dgemm_armv8a_asm_8x6r) ukr_dgemm_bulk_t;
 ////////////////////
 
 
-void bls_dgemm
+err_t bls_dgemm
     (
-     dim_t m0,
-     dim_t n0,
-     dim_t k,
-     double *restrict alpha,
-     double *restrict a, inc_t rs_a, inc_t cs_a,
-     double *restrict b, inc_t rs_b, inc_t cs_b,
-     double *restrict beta,
-     double *restrict c, inc_t rs_c, inc_t cs_c,
-     cntx_t *cntx,
-     rntm_t *rntm,
-     ukr_dgemm_sup_t ukr_sup,
-     dim_t mr, dim_t nr
+     const obj_t*     _alpha,
+     const obj_t*     _a,
+     const obj_t*     _b,
+     const obj_t*     _beta,
+     const obj_t*     _c,
+     const cntx_t*    cntx,
+     const rntm_t*    rntm,
+           thrinfo_t* thread
     );
 
 #ifdef __cplusplus

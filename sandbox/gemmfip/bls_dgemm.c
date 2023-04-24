@@ -11,22 +11,39 @@ BLIS_INLINE void assert_(const bool cond, const char *msg)
 
 #define min_(a, b) ( (a) < (b) ? (a) : (b) )
 
-void bls_dgemm
+err_t bls_dgemm
     (
-     dim_t m0,
-     dim_t n0,
-     dim_t k0,
-     double *restrict alpha0,
-     double *restrict a, inc_t rs_a, inc_t cs_a,
-     double *restrict b, inc_t rs_b, inc_t cs_b,
-     double *restrict beta0,
-     double *restrict c, inc_t rs_c, inc_t cs_c,
-     cntx_t *cntx,
-     rntm_t *rntm,
-     ukr_dgemm_sup_t ukr_sup,
-     dim_t mr, dim_t nr
+     const obj_t*     _alpha,
+     const obj_t*     _a,
+     const obj_t*     _b,
+     const obj_t*     _beta,
+     const obj_t*     _c,
+     const cntx_t*    cntx,
+     const rntm_t*    rntm,
+           thrinfo_t* thread
     )
 {
+#if 0
+    assert( bli_obj_has_notrans( _a ) ); // Transpose should be handled at upper level.
+    assert( bli_obj_has_notrans( _b ) );
+    assert( bli_obj_has_notrans( _c ) );
+#endif
+    dim_t m0 = bli_obj_length( _c );
+    dim_t n0 = bli_obj_width ( _c );
+    dim_t k0 = bli_obj_width ( _a );
+    double *restrict alpha0 = bli_obj_buffer( _alpha );
+    double *restrict a      = bli_obj_buffer( _a     );
+    double *restrict b      = bli_obj_buffer( _b     );
+    double *restrict beta0  = bli_obj_buffer( _beta  );
+    double *restrict c      = bli_obj_buffer( _c     );
+    inc_t rs_a = bli_obj_row_stride( _a ), cs_a = bli_obj_col_stride( _a );
+    inc_t rs_b = bli_obj_row_stride( _b ), cs_b = bli_obj_col_stride( _b );
+    inc_t rs_c = bli_obj_row_stride( _c ), cs_c = bli_obj_col_stride( _c );
+    // Borrowed GEMMFIP kernel metadata.
+    dim_t mr = ( dim_t )_a->ker_params;
+    dim_t nr = ( dim_t )_b->ker_params;
+    ukr_dgemm_sup_t ukr_sup = ( ukr_dgemm_sup_t )_c->ker_params;
+
     const dim_t mc_= bli_cntx_get_blksz_def_dt( BLIS_DOUBLE, BLIS_MC, cntx );
     const dim_t nc_= bli_cntx_get_blksz_def_dt( BLIS_DOUBLE, BLIS_NC, cntx );
     const dim_t kc = bli_cntx_get_blksz_def_dt( BLIS_DOUBLE, BLIS_KC, cntx );
@@ -53,19 +70,21 @@ void bls_dgemm
     bli_auxinfo_set_next_a( 0, &data );
     bli_auxinfo_set_next_b( 0, &data );
 
-    // For querying BLIS' memory pool.
-    pba_t *pba = bli_pba_query();
-    mem_t  mem_a, mem_b;
+    thrinfo_t* restrict thread_jc = bli_thrinfo_sub_node( thread );
+    thrinfo_t* restrict thread_pc = bli_thrinfo_sub_node( thread_jc );
+    thrinfo_t* restrict thread_pb = bli_thrinfo_sub_node( thread_pc );
+    thrinfo_t* restrict thread_ic = bli_thrinfo_sub_node( thread_pb );
+    thrinfo_t* restrict thread_pa = bli_thrinfo_sub_node( thread_ic );
+    thrinfo_t* restrict thread_jr = bli_thrinfo_sub_node( thread_pa );
 
-    int b_size = nr * num_jr * kc_max * sizeof( double );
-    int a_size = mr * num_ir * kc_max * sizeof( double );
+    bli_packm_sup_init_mem( has_pack_b, BLIS_BUFFER_FOR_B_PANEL, BLIS_DOUBLE, nc, kc_max, nr, thread_pb );
+    bli_packm_sup_init_mem( has_pack_a, BLIS_BUFFER_FOR_A_BLOCK, BLIS_DOUBLE, mc, kc_max, mr, thread_pa );
 
-    // Query the pool for packing space.
-    bli_pba_acquire_m( pba, b_size, BLIS_BUFFER_FOR_B_PANEL, &mem_b );
-    bli_pba_acquire_m( pba, a_size, BLIS_BUFFER_FOR_A_BLOCK, &mem_a );
+    mem_t* mem_b = bli_thrinfo_mem( thread_pb );
+    mem_t* mem_a = bli_thrinfo_mem( thread_pa );
 
-    double *b_panels = bli_mem_buffer( &mem_b );
-    double *a_panels = bli_mem_buffer( &mem_a );
+    double *b_panels = bli_mem_buffer( mem_b );
+    double *a_panels = bli_mem_buffer( mem_a );
 
     // Constants.
     double one = 1.0;
@@ -233,8 +252,5 @@ void bls_dgemm
             lc_offset += k_uker;
         }
     }
-
-    bli_pba_release( pba, &mem_b );
-    bli_pba_release( pba, &mem_a );
 }
 
