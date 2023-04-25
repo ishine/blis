@@ -712,7 +712,8 @@ BLIS_INLINE void bli_dgemmsup2_rv_haswell_asm_## M ##x8n_ ## PACKB ## _ ## BAlig
               c_edge, rs_c_edge, cs_c_edge, \
               data, cntx, \
               a_p, 0, \
-              b_p, 0 PACK_ ##PACKB( +1 ) ); \
+              b_p, 0 PACK_ ##PACKB( +1 ), \
+	      0, NULL ); \
         if ( c_edge == c_t ) \
             for ( int i = 0; i < m; ++i ) \
                 for ( int j = 0; j < n_left; ++j ) \
@@ -841,7 +842,8 @@ void bli_dgemmsup2_cv_haswell_asm_8x6m
           c, cs_c0, rs_c0,
           data, cntx,
           b_p, pack_b,
-          a_p, pack_a );
+          a_p, pack_a,
+          ares_offset, semaphore );
 }
 
 #endif

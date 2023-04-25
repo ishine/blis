@@ -599,7 +599,8 @@ BLIS_INLINE void bli_dgemmsup2_rv_haswell_asm_6x ## N ## m_ ## PACKA ## _ ## BAl
               c_edge, rs_c_edge, cs_c_edge, \
               data, cntx, \
               a_p, 0 PACK_ ##PACKA( +1 ), \
-              b_p, 0 ); \
+              b_p, 0, \
+	      0, NULL ); \
         if ( c_edge == c_t ) \
             for ( int i = 0; i < m_left; ++i ) \
                 for ( int j = 0; j < n; ++j ) \
