@@ -83,8 +83,9 @@ err_t bls_dgemm
         // TODO: There should be a one-time warning like "Specified ... but used ..."
         return BLIS_SUCCESS;
 
-    bli_packm_sup_init_mem( has_pack_b, BLIS_BUFFER_FOR_B_PANEL, BLIS_DOUBLE, nc, kc_max,     nr, thread_pb );
-    bli_packm_sup_init_mem( has_pack_a, BLIS_BUFFER_FOR_A_BLOCK, BLIS_DOUBLE, mc, kc_max + 1, mr, thread_pa );
+    bli_packm_sup_init_mem( has_pack_b, BLIS_BUFFER_FOR_B_PANEL, BLIS_DOUBLE, nc, kc_max, nr, thread_pb );
+    bli_packm_sup_init_mem( has_pack_a, BLIS_BUFFER_FOR_A_BLOCK, BLIS_DOUBLE, mc, kc_max, mr, thread_pa );
+    bli_packm_sup_init_mem( 1,          BLIS_BUFFER_FOR_GEN_USE, BLIS_FLOAT,  num_ir,  1,  1, thread_ic );
 
     mem_t* mem_b = bli_thrinfo_mem( thread_pb );
     mem_t* mem_a = bli_thrinfo_mem( thread_pa );
@@ -110,10 +111,10 @@ err_t bls_dgemm
             dim_t k_ps = k_uker;
 
             // At the end of the packing space is a semaphore for A-restreaming.
-            bool *semaphore = ( bool* )( a_panels + mr * num_ir * kc_max );
-            if ( !thread_pa->thread_id )
+            bool *semaphore = bli_mem_buffer( bli_thrinfo_mem( thread_ic ) );
+            if ( !thread_ic->thread_id )
                 memset( semaphore, 0, sizeof( bool ) * num_ir );
-            bli_thrinfo_barrier( thread_pa );
+            bli_thrinfo_barrier( thread_ic );
 
             for ( dim_t ic_offset = 0; ic_offset < m0; ic_offset += mc ) {
                 double *a_l2 = a_l3 + ic_offset * rs_a;
@@ -276,7 +277,7 @@ err_t bls_dgemm
             }
             beta = &one;
             lc_offset += k_uker;
-            bli_thrinfo_barrier( thread_pa );
+            bli_thrinfo_barrier( thread_ic );
         }
     }
     return BLIS_SUCCESS;
