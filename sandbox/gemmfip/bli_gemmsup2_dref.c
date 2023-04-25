@@ -128,7 +128,8 @@ void bli_dgemmsup2_ref
             cntx,
             a_p, pack_a,
             b_p, pack_b );
-      *semaphore = TRUE;
+      if ( pack_a )
+        *semaphore = TRUE;
 
       m -= m_loc;
       a += ps_a;

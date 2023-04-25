@@ -158,6 +158,8 @@ err_t bls_dgemm
                 const dim_t num_ir_loc = bli_min( num_ir, ( m0 - ic_offset + mr - 1 ) / mr );
                 bli_thread_range_sub( thread_jr, num_jr_loc, 1, FALSE, &jr_start,    &jr_end     );
                 bli_thread_range_sub( thread_jr, num_ir_loc, 1, FALSE, &ares_offset, &ares_dummy );
+                // Don't offset on pure GEMMSUP.
+                if ( has_pack_a ) ares_offset = 0;
 
                 for ( dim_t jr = jr_start; jr < jr_end; ++jr ) {
                     double *c_l1 = c_l2 + jr * nr * cs_c;
