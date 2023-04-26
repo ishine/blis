@@ -111,9 +111,9 @@ err_t bls_dgemm
             dim_t k_ps = k_uker;
 
             // At the end of the packing space is a semaphore for A-restreaming.
-            bool *semaphore = bli_mem_buffer( bli_thrinfo_mem( thread_ic ) );
+            uint32_t *semaphore = bli_mem_buffer( bli_thrinfo_mem( thread_ic ) );
             if ( !thread_ic->thread_id )
-                memset( semaphore, 0, sizeof( bool ) * num_ir );
+                memset( semaphore, 0, sizeof( uint32_t ) * num_ir );
             bli_thrinfo_barrier( thread_ic );
 
             for ( dim_t ic_offset = 0; ic_offset < m0; ic_offset += mc ) {

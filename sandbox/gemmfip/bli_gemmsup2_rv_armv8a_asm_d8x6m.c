@@ -657,7 +657,7 @@ void bli_dgemmsup2_rv_armv8a_asm_8x6m
      double *restrict a_p, int pack_a,
      double *restrict b_p, int pack_b,
      inc_t            ares_offset,
-     bool            *semaphore
+     uint32_t        *semaphore
     )
 {
 #ifdef DEBUG

@@ -70,7 +70,7 @@ void bli_dgemmsup2_ref
      double *restrict a_p_, int pack_a,
      double *restrict b_p,  int pack_b,
      inc_t            ares_offset, // only has affect when pack_a == true
-     bool            *semaphore_
+     uint32_t        *semaphore_
     )
 {
   inc_t ps_a_p    = bls_aux_ps_ext_p   ( data );
@@ -87,7 +87,7 @@ void bli_dgemmsup2_ref
   double *restrict a   = a_ +         ps_a   * ares_offset;
   double *restrict a_p = a_p_ +       ps_a_p * ares_offset;
   double *restrict c   = c_ + mr_ref * rs_c0 * ares_offset;
-  bool            *semaphore = semaphore_ +    ares_offset;
+  uint32_t        *semaphore = semaphore_ +    ares_offset;
 
   do
   {

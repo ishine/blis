@@ -40,7 +40,7 @@ void funcname \
      double *restrict a_p, int pack_a, \
      double *restrict b_p, int pack_b, \
      inc_t            ares_offset, \
-     bool            *semaphore \
+     uint32_t        *semaphore \
     )
 
 ////////////////////
