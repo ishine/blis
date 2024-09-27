@@ -1,0 +1,443 @@
+#if defined(__aarch64__) || defined(__arm__) || defined(_M_ARM) || defined(_ARCH_PPC)
+
+#include "blis.h"
+#include <assert.h>
+
+
+// Label locality & misc.
+#include "armv8a_asm_utils.h"
+
+// Nanokernel operations.
+#include "armv8a_asm_d2x2.h"
+
+#define DGEMM_8X6_MKER_NOIDX_LOOP(INST,C00,C01,C02,C10,C11,C12,C20,C21,C22,C30,C31,C32,C40,C41,C42,C50,C51,C52,C60,C61,C62,C70,C71,C72,A0,A1,A2,A3,B0,B1,B2,AEL0,AEL1,AEL2,AEL3,AEL4,AEL5,AEL6,AEL7,CSA,BADDR,BSHIFT,LOADNEXT,CADDR,RSC,LASTB,PRFC,PAADDR,PACKA,PBADDR,PACKB) \
+  #INST " v"#C00".2d, v"#A0".2d, v"#B0".2d \n\t" GEMM_PRFC_FH_ ##PRFC (CADDR) \
+  #INST " v"#C01".2d, v"#A0".2d, v"#B1".2d \n\t" GEMM_PRFC_LH_FWD_ ##PRFC (CADDR,RSC,LASTB) \
+  #INST " v"#C02".2d, v"#A0".2d, v"#B2".2d \n\t" \
+  PACK_ ##PACKA( " str d"#A0", [ "#PAADDR", 0 ] \n\t" ) \
+  " ld1r  { v"#A0".2d }, [ "#AEL4" ], "#CSA" \n\t" \
+  \
+  #INST " v"#C10".2d, v"#A1".2d, v"#B0".2d \n\t" GEMM_PRFC_FH_ ##PRFC (CADDR) \
+  #INST " v"#C11".2d, v"#A1".2d, v"#B1".2d \n\t" GEMM_PRFC_LH_FWD_ ##PRFC (CADDR,RSC,LASTB) \
+  #INST " v"#C12".2d, v"#A1".2d, v"#B2".2d \n\t" \
+  PACK_ ##PACKA( " str d"#A1", [ "#PAADDR", 8 ] \n\t" ) \
+  " ld1r  { v"#A1".2d }, [ "#AEL5" ], "#CSA" \n\t" \
+  \
+  #INST " v"#C20".2d, v"#A2".2d, v"#B0".2d \n\t" GEMM_PRFC_FH_ ##PRFC (CADDR) \
+  #INST " v"#C21".2d, v"#A2".2d, v"#B1".2d \n\t" GEMM_PRFC_LH_FWD_ ##PRFC (CADDR,RSC,LASTB) \
+  #INST " v"#C22".2d, v"#A2".2d, v"#B2".2d \n\t" \
+  PACK_ ##PACKA( " str d"#A2", [ "#PAADDR", 8*2 ] \n\t" ) \
+  " ld1r  { v"#A2".2d }, [ "#AEL6" ], "#CSA" \n\t" \
+  \
+  #INST " v"#C30".2d, v"#A3".2d, v"#B0".2d \n\t" GEMM_PRFC_FH_ ##PRFC (CADDR) \
+  #INST " v"#C31".2d, v"#A3".2d, v"#B1".2d \n\t" GEMM_PRFC_LH_FWD_ ##PRFC (CADDR,RSC,LASTB) \
+  #INST " v"#C32".2d, v"#A3".2d, v"#B2".2d \n\t" \
+  PACK_ ##PACKA( " str d"#A3", [ "#PAADDR", 8*3 ] \n\t" ) \
+  " ld1r  { v"#A3".2d }, [ "#AEL7" ], "#CSA" \n\t" \
+  \
+  #INST " v"#C40".2d, v"#A0".2d, v"#B0".2d \n\t" GEMM_PRFC_FH_ ##PRFC (CADDR) \
+  #INST " v"#C41".2d, v"#A0".2d, v"#B1".2d \n\t" GEMM_PRFC_LH_FWD_ ##PRFC (CADDR,RSC,LASTB) \
+  #INST " v"#C42".2d, v"#A0".2d, v"#B2".2d \n\t" \
+  PACK_ ##PACKA   ( " str     d"#A0",     [ "#PAADDR", 8*4 ] \n\t" ) \
+  LOAD_ ##LOADNEXT( " ld1r  { v"#A0".2d }, [ "#AEL0" ], "#CSA" \n\t" ) \
+  \
+  #INST " v"#C50".2d, v"#A1".2d, v"#B0".2d \n\t" GEMM_PRFC_FH_ ##PRFC (CADDR) \
+  #INST " v"#C51".2d, v"#A1".2d, v"#B1".2d \n\t" GEMM_PRFC_LH_FWD_ ##PRFC (CADDR,RSC,LASTB) \
+  #INST " v"#C52".2d, v"#A1".2d, v"#B2".2d \n\t" \
+  PACK_ ##PACKA   ( " str     d"#A1",     [ "#PAADDR", 8*5 ] \n\t" ) \
+  LOAD_ ##LOADNEXT( " ld1r  { v"#A1".2d }, [ "#AEL1" ], "#CSA" \n\t" ) \
+  \
+  #INST " v"#C60".2d, v"#A2".2d, v"#B0".2d \n\t" GEMM_PRFC_FH_ ##PRFC (CADDR) \
+  #INST " v"#C61".2d, v"#A2".2d, v"#B1".2d \n\t" GEMM_PRFC_LH_FWD_ ##PRFC (CADDR,RSC,LASTB) \
+  #INST " v"#C62".2d, v"#A2".2d, v"#B2".2d \n\t" \
+  PACK_ ##PACKA   ( " str     d"#A2",     [ "#PAADDR", 8*6 ] \n\t" ) \
+  LOAD_ ##LOADNEXT( " ld1r  { v"#A2".2d }, [ "#AEL2" ], "#CSA" \n\t" ) \
+  \
+  #INST " v"#C70".2d, v"#A3".2d, v"#B0".2d \n\t" GEMM_PRFC_FH_ ##PRFC (CADDR) \
+  #INST " v"#C71".2d, v"#A3".2d, v"#B1".2d \n\t" GEMM_PRFC_LH_FWD_ ##PRFC (CADDR,RSC,LASTB) \
+  #INST " v"#C72".2d, v"#A3".2d, v"#B2".2d \n\t" \
+  PACK_ ##PACKA   ( " str     d"#A3",     [ "#PAADDR", 8*7 ] \n\t" ) \
+  LOAD_ ##LOADNEXT( " ld1r  { v"#A3".2d }, [ "#AEL3" ], "#CSA" \n\t" ) \
+  \
+  DGEMM_STORE1V_ ##PACKB (B0,PBADDR,0) \
+  DGEMM_LOAD1V_ ##LOADNEXT (B0,BADDR,BSHIFT) \
+  DGEMM_STORE1V_ ##PACKB (B1,PBADDR,16) \
+  DGEMM_LOAD1V_ ##LOADNEXT (B1,BADDR,BSHIFT+16) \
+  DGEMM_STORE1V_ ##PACKB (B2,PBADDR,32)
+
+#define LOAD_noload( INST )
+#define PACK_nopack( INST )
+#define LOAD_load( INST ) INST
+#define PACK_pack( INST ) INST
+
+#define DGEMM_STORE1V_nopack(V,ADDR,SHIFT)
+#define DGEMM_STORE1V_pack(V,ADDR,SHIFT) \
+  DSTORE1V(V,ADDR,SHIFT)
+
+#define DGEMM_LOAD1V_noload(V1,ADDR,IMM)
+#define DGEMM_LOAD1V_load(V1,ADDR,IMM) \
+  DLOAD1V(V1,ADDR,IMM)
+
+#define GEMM_PRFC_FH_noload(CADDR)
+#define GEMM_PRFC_LH_FWD_noload(CADDR,RSC,LASTB)
+#define GEMM_PRFC_FH_load(CADDR) \
+" prfm PLDL1KEEP, ["#CADDR"]           \n\t"
+#define GEMM_PRFC_LH_FWD_load(CADDR,RSC,LASTB) \
+" prfm PLDL1KEEP, ["#CADDR", "#LASTB"] \n\t" \
+" add  "#CADDR", "#CADDR", "#RSC"      \n\t"
+
+#define DGEMM_8X6_MKER_NOIDX_LOOP_LOC(INST,B0,B1,B2,B3,LOADNEXT,PRFC,PACKA,PACKB) \
+  DGEMM_8X6_MKER_NOIDX_LOOP(INST,0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,B0,B1,B2,%[a_0],%[a_1],%[a_2],%[a_3],%[a_4],%[a_5],%[a_6],%[a_7],%[cs_a],%[b],16,LOADNEXT,%[c_ld],%[rs_c],40,PRFC,%[a_p],PACKA,%[b_p],PACKB) \
+  LOAD_ ##LOADNEXT ( " add  %[b], %[b], %[rs_b]  \n\t" ) \
+  DGEMM_LOAD1V_ ##LOADNEXT (B2,%[b],0) \
+  PACK_ ##PACKA( " add  %[a_p], %[a_p], #8*8  \n\t" ) \
+  PACK_ ##PACKB( " add  %[b_p], %[b_p], #6*8  \n\t" )
+
+#define PRFA_LOC \
+ "prfm PLDL1STRM, [%[a_next]] \n\t" \
+ "add  %[a_next], %[a_next], %[cs_a2] \n\t"
+
+// For row-storage of C.
+#define DLOADC_3V_R_FWD(C0,C1,C2,CADDR,CSHIFT,RSC) \
+  DLOAD2V(C0,C1,CADDR,CSHIFT) \
+  DLOAD1V(C2,CADDR,CSHIFT+32) \
+" add  "#CADDR", "#CADDR", "#RSC" \n\t"
+#define DSTOREC_3V_R_FWD(C0,C1,C2,CADDR,CSHIFT,RSC) \
+  DSTORE2V(C0,C1,CADDR,CSHIFT) \
+  DSTORE1V(C2,CADDR,CSHIFT+32) \
+" add  "#CADDR", "#CADDR", "#RSC" \n\t"
+
+// For col-storage of C.
+#define DLOADC_4V_C_FWD(C0,C1,C2,C3,CADDR,CSHIFT,CSC) \
+  DLOAD4V(C0,C1,C2,C3,CADDR,CSHIFT) \
+" add  "#CADDR", "#CADDR", "#CSC" \n\t"
+#define DSTOREC_4V_C_FWD(C0,C1,C2,C3,CADDR,CSHIFT,CSC) \
+  DSTORE4V(C0,C1,C2,C3,CADDR,CSHIFT) \
+" add  "#CADDR", "#CADDR", "#CSC" \n\t"
+
+
+#define GENDEF(PACKA,PACKB) \
+BLIS_INLINE void bli_dgemmsup2_rv_armv8a_asm_8x6_ ## PACKA ## _ ## PACKB \
+    ( \
+     dim_t            m, \
+     dim_t            n, \
+     dim_t            k, \
+     double *restrict alpha, \
+     double *restrict a, inc_t rs_a0, inc_t cs_a0, \
+     double *restrict b, inc_t rs_b0, inc_t cs_b0, \
+     double *restrict beta, \
+     double *restrict c, inc_t rs_c0, inc_t cs_c0, \
+     auxinfo_t       *data, \
+     cntx_t          *cntx, \
+     double *restrict a_p, \
+     double *restrict b_p \
+    ) \
+{ \
+  const void* a_next = bli_auxinfo_next_a( data ); \
+  const void* b_next = bli_auxinfo_next_b( data ); \
+  uint64_t cs_a_next = bls_aux_ls_ext_next( data ); \
+\
+  /* Typecast local copies of integers in case dim_t and inc_t are a
+   * different size than is expected by load instructions. */ \
+  uint64_t k_mker = k / 4; \
+  uint64_t k_left = k % 4; \
+  uint64_t cs_a   = cs_a0; \
+  uint64_t rs_b   = rs_b0; \
+  uint64_t rs_c   = rs_c0; \
+  uint64_t cs_c   = cs_c0; \
+\
+  /* Define all integer registers outside asm block & avoid "x*" clobbing */ \
+  uint64_t c_ld; \
+  double *a_0 = a, \
+         *a_1 = a_0 + rs_a0, \
+         *a_2 = a_1 + rs_a0, \
+         *a_3 = a_2 + rs_a0, \
+         *a_4 = a_3 + rs_a0, \
+         *a_5 = a_4 + rs_a0, \
+         *a_6 = a_5 + rs_a0, \
+         *a_7 = a_6 + rs_a0; \
+\
+  __asm__ volatile \
+  ( \
+ /* Multiply some address skips by sizeof(double). */ \
+" lsl             %[cs_a], %[cs_a], #3            \n\t" \
+" lsl             %[rs_b], %[rs_b], #3            \n\t" \
+" lsl             %[rs_c], %[rs_c], #3            \n\t" \
+" lsl             %[cs_c], %[cs_c], #3            \n\t" \
+"                                                 \n\t" \
+" mov             %[c_ld], %[c]                   \n\t" \
+"                                                 \n\t" \
+/* %[k_mker]: Number of 4-loops.
+ * %[k_left]: Number of loops left. */ \
+\
+ /* Load from memory. */ \
+LABEL(DLOAD_ABC_ ## PACKA ## _ ## PACKB) \
+"                                                 \n\t" /* No-microkernel early return is a must */ \
+" cmp             %[k_mker], #0                   \n\t" /*  to avoid out-of-boundary read. */ \
+BEQ(DK_LEFT_LOOP_INIT_ ## PACKA ## _ ## PACKB) \
+"                                                 \n\t" /* Load A. */ \
+" ld1r            {v24.2d}, [%[a_0]], %[cs_a]     \n\t" /* 0 */ \
+" ld1r            {v25.2d}, [%[a_1]], %[cs_a]     \n\t" /* 1 */ \
+" ld1r            {v26.2d}, [%[a_2]], %[cs_a]     \n\t" /* 2 */ \
+" ld1r            {v27.2d}, [%[a_3]], %[cs_a]     \n\t" /* 3 */ \
+"                                                 \n\t" \
+" ldr             q28, [%[b], #16*0]              \n\t" /* Load B. */ \
+" ldr             q29, [%[b], #16*1]              \n\t" \
+" ldr             q30, [%[b], #16*2]              \n\t" \
+" add             %[b], %[b], %[rs_b]             \n\t" \
+" ldr             q31, [%[b], #16*0]              \n\t" \
+\
+/* Start microkernel loop -- Special treatment for the very first loop. */ \
+" subs            %[k_mker], %[k_mker], #1        \n\t" /* Set count before final replica. */ \
+PRFA_LOC DGEMM_8X6_MKER_NOIDX_LOOP_LOC(fmul,28,29,30,31,load,load,PACKA,PACKB) \
+PRFA_LOC DGEMM_8X6_MKER_NOIDX_LOOP_LOC(fmla,31,28,29,30,load,noload,PACKA,PACKB) \
+BEQ(DFIN_MKER_LOOP_ ## PACKA ## _ ## PACKB) /* Branch early to avoid reading excess mem. */ \
+PRFA_LOC DGEMM_8X6_MKER_NOIDX_LOOP_LOC(fmla,30,31,28,29,load,noload,PACKA,PACKB) \
+PRFA_LOC DGEMM_8X6_MKER_NOIDX_LOOP_LOC(fmla,29,30,31,28,load,noload,PACKA,PACKB) \
+/* Start microkernel loop. */ \
+LABEL(DK_MKER_LOOP_ ## PACKA ## _ ## PACKB) \
+" subs            %[k_mker], %[k_mker], #1        \n\t" /* Set count before final replica. */ \
+PRFA_LOC DGEMM_8X6_MKER_NOIDX_LOOP_LOC(fmla,28,29,30,31,load,noload,PACKA,PACKB) \
+PRFA_LOC DGEMM_8X6_MKER_NOIDX_LOOP_LOC(fmla,31,28,29,30,load,noload,PACKA,PACKB) \
+BEQ(DFIN_MKER_LOOP_ ## PACKA ## _ ## PACKB) /* Branch early to avoid reading excess mem. */ \
+PRFA_LOC DGEMM_8X6_MKER_NOIDX_LOOP_LOC(fmla,30,31,28,29,load,noload,PACKA,PACKB) \
+PRFA_LOC DGEMM_8X6_MKER_NOIDX_LOOP_LOC(fmla,29,30,31,28,load,noload,PACKA,PACKB) \
+BRANCH(DK_MKER_LOOP_ ## PACKA ## _ ## PACKB) \
+\
+/* Final microkernel loop. */ \
+LABEL(DFIN_MKER_LOOP_ ## PACKA ## _ ## PACKB) \
+PRFA_LOC DGEMM_8X6_MKER_NOIDX_LOOP_LOC(fmla,30,31,28,29,noload,noload,PACKA,PACKB) \
+" ld1r            {v24.2d}, [%[a_0]], %[cs_a]     \n\t" \
+" ld1r            {v25.2d}, [%[a_1]], %[cs_a]     \n\t" \
+" ld1r            {v26.2d}, [%[a_2]], %[cs_a]     \n\t" \
+" ld1r            {v27.2d}, [%[a_3]], %[cs_a]     \n\t" \
+" ldr             q30, [%[b], #16*1]              \n\t" \
+" ldr             q31, [%[b], #16*2]              \n\t" \
+" add             %[b], %[b], %[rs_b]             \n\t" \
+PRFA_LOC DGEMM_8X6_MKER_NOIDX_LOOP_LOC(fmla,29,30,31,28,noload,noload,PACKA,PACKB) \
+\
+/* Loops left behind microkernels. */ \
+LABEL(DK_LEFT_LOOP_ ## PACKA ## _ ## PACKB) \
+" cmp             %[k_left], #0                   \n\t" /* End of exec. */ \
+BEQ(DWRITE_MEM_PREP_ ## PACKA ## _ ## PACKB) \
+" ld1r            {v24.2d}, [%[a_0]], %[cs_a]     \n\t" \
+" ld1r            {v25.2d}, [%[a_1]], %[cs_a]     \n\t" \
+" ld1r            {v26.2d}, [%[a_2]], %[cs_a]     \n\t" \
+" ld1r            {v27.2d}, [%[a_3]], %[cs_a]     \n\t" \
+" ldr             q28, [%[b], #16*0]              \n\t" \
+" ldr             q29, [%[b], #16*1]              \n\t" \
+" ldr             q30, [%[b], #16*2]              \n\t" \
+" add             %[b], %[b], %[rs_b]             \n\t" \
+" sub             %[k_left], %[k_left], #1        \n\t" \
+PRFA_LOC DGEMM_8X6_MKER_NOIDX_LOOP_LOC(fmla,28,29,30,31,noload,noload,PACKA,PACKB) \
+BRANCH(DK_LEFT_LOOP_ ## PACKA ## _ ## PACKB) \
+\
+/* Initial loop without microkernels. */ \
+LABEL(DK_LEFT_LOOP_INIT_ ## PACKA ## _ ## PACKB) \
+" cmp             %[k_left], #0                   \n\t" /* End of exec. */ \
+BEQ(DCLEAR_CCOLS_ ## PACKA ## _ ## PACKB) \
+" ld1r            {v24.2d}, [%[a_0]], %[cs_a]     \n\t" \
+" ld1r            {v25.2d}, [%[a_1]], %[cs_a]     \n\t" \
+" ld1r            {v26.2d}, [%[a_2]], %[cs_a]     \n\t" \
+" ld1r            {v27.2d}, [%[a_3]], %[cs_a]     \n\t" \
+" ldr             q28, [%[b], #16*0]              \n\t" \
+" ldr             q29, [%[b], #16*1]              \n\t" \
+" ldr             q30, [%[b], #16*2]              \n\t" \
+" add             %[b], %[b], %[rs_b]             \n\t" \
+" sub             %[k_left], %[k_left], #1        \n\t" \
+PRFA_LOC DGEMM_8X6_MKER_NOIDX_LOOP_LOC(fmul,28,29,30,31,noload,load,PACKA,PACKB) \
+BRANCH(DK_LEFT_LOOP_ ## PACKA ## _ ## PACKB) \
+\
+/* No loop at all. Clear rows separately. */ \
+LABEL(DCLEAR_CCOLS_ ## PACKA ## _ ## PACKB) \
+CLEAR8V(0,1,2,3,4,5,6,7) \
+CLEAR8V(8,9,10,11,12,13,14,15) \
+CLEAR8V(16,17,18,19,20,21,22,23) \
+\
+/* Scale and write to memory. */ \
+LABEL(DWRITE_MEM_PREP_ ## PACKA ## _ ## PACKB) \
+" ld1r            {v24.2d}, [%[alpha]]            \n\t" /* Load alpha & beta. */ \
+" ld1r            {v25.2d}, [%[beta]]             \n\t" \
+"                                                 \n\t" \
+LABEL(DPREFETCH_ABNEXT_ ## PACKA ## _ ## PACKB) \
+" prfm            PLDL1KEEP, [%[b_next], 64*0]    \n\t" \
+" prfm            PLDL1KEEP, [%[b_next], 64*1]    \n\t" \
+" prfm            PLDL1KEEP, [%[b_next], 64*2]    \n\t" \
+" prfm            PLDL1KEEP, [%[b_next], 64*3]    \n\t" \
+"                                                 \n\t" \
+" fmov            d26, #1.0                       \n\t" \
+" fcmp            d24, d26                        \n\t" \
+BEQ(DUNIT_ALPHA_ ## PACKA ## _ ## PACKB)                                        \
+DSCALE8V(0,1,2,3,4,5,6,7,24,0)                          \
+DSCALE8V(8,9,10,11,12,13,14,15,24,0)                    \
+DSCALE8V(16,17,18,19,20,21,22,23,24,0)                  \
+LABEL(DUNIT_ALPHA_ ## PACKA ## _ ## PACKB)                                      \
+"                                                 \n\t" \
+" cmp             %[cs_c], #8                     \n\t" \
+" mov             %[c_ld], %[c]                   \n\t" /* C address for loading. */ \
+"                                                 \n\t" \
+BNE(DWRITE_MEM_C_ ## PACKA ## _ ## PACKB) \
+\
+/* Row-major C-storage. */ \
+LABEL(DWRITE_MEM_R_ ## PACKA ## _ ## PACKB) \
+" fcmp            d25, #0.0                       \n\t" /* Sets conditional flag whether *beta == 0. */ \
+"                                                 \n\t" /* This conditional flag will be used        */ \
+"                                                 \n\t" /*  multiple times for skipping load.        */ \
+\
+/* Row 0 & 1: */ \
+BEQ(DZERO_BETA_R_0_1_ ## PACKA ## _ ## PACKB) \
+DLOADC_3V_R_FWD(26,27,28,%[c_ld],0,%[rs_c]) \
+DLOADC_3V_R_FWD(29,30,31,%[c_ld],0,%[rs_c]) \
+DSCALEA2V(0,1,26,27,25,0) \
+DSCALEA2V(2,3,28,29,25,0) \
+DSCALEA2V(4,5,30,31,25,0) \
+LABEL(DZERO_BETA_R_0_1_ ## PACKA ## _ ## PACKB) \
+DSTOREC_3V_R_FWD(0,1,2,%[c],0,%[rs_c]) \
+DSTOREC_3V_R_FWD(3,4,5,%[c],0,%[rs_c]) \
+/* Row 2 & 3 & 4 & 5: */ \
+BEQ(DZERO_BETA_R_2_3_4_5_ ## PACKA ## _ ## PACKB) \
+DLOADC_3V_R_FWD(26,27,28,%[c_ld],0,%[rs_c]) \
+DLOADC_3V_R_FWD(29,30,31,%[c_ld],0,%[rs_c]) \
+DLOADC_3V_R_FWD(0,1,2,%[c_ld],0,%[rs_c]) \
+DLOADC_3V_R_FWD(3,4,5,%[c_ld],0,%[rs_c]) \
+DSCALEA4V(6,7,8,9,26,27,28,29,25,0) \
+DSCALEA4V(10,11,12,13,30,31,0,1,25,0) \
+DSCALEA4V(14,15,16,17,2,3,4,5,25,0) \
+LABEL(DZERO_BETA_R_2_3_4_5_ ## PACKA ## _ ## PACKB) \
+DSTOREC_3V_R_FWD(6,7,8,%[c],0,%[rs_c]) \
+DSTOREC_3V_R_FWD(9,10,11,%[c],0,%[rs_c]) \
+DSTOREC_3V_R_FWD(12,13,14,%[c],0,%[rs_c]) \
+DSTOREC_3V_R_FWD(15,16,17,%[c],0,%[rs_c]) \
+/* Row 6 & 7 */ \
+BEQ(DZERO_BETA_R_6_7_ ## PACKA ## _ ## PACKB) \
+DLOADC_3V_R_FWD(26,27,28,%[c_ld],0,%[rs_c]) \
+DLOADC_3V_R_FWD(29,30,31,%[c_ld],0,%[rs_c]) \
+DSCALEA2V(18,19,26,27,25,0) \
+DSCALEA2V(20,21,28,29,25,0) \
+DSCALEA2V(22,23,30,31,25,0) \
+LABEL(DZERO_BETA_R_6_7_ ## PACKA ## _ ## PACKB) \
+DSTOREC_3V_R_FWD(18,19,20,%[c],0,%[rs_c]) \
+DSTOREC_3V_R_FWD(21,22,23,%[c],0,%[rs_c]) \
+BRANCH(DEND_WRITE_MEM_ ## PACKA ## _ ## PACKB) \
+\
+/* Column-major C-storage. */ \
+LABEL(DWRITE_MEM_C_ ## PACKA ## _ ## PACKB) \
+" ld1r            {v30.2d}, [%[beta]]             \n\t" /* Reload beta. */ \
+" fcmp            d30, #0.0                       \n\t" /* Sets conditional flag whether *beta == 0. */ \
+"                                                 \n\t" /* This conditional flag will be used */ \
+"                                                 \n\t" /*  multiple times for skipping load. */ \
+/* In-register transpose,
+ *  do transposition in row-order. */ \
+" trn1            v24.2d, v0.2d, v3.2d            \n\t" /* Row 0-1. */ \
+" trn2            v25.2d, v0.2d, v3.2d            \n\t" \
+" trn1            v26.2d, v1.2d, v4.2d            \n\t" \
+" trn2            v27.2d, v1.2d, v4.2d            \n\t" \
+" trn1            v28.2d, v2.2d, v5.2d            \n\t" \
+" trn2            v29.2d, v2.2d, v5.2d            \n\t" \
+"                                                 \n\t" \
+" trn1            v0.2d, v6.2d, v9.2d             \n\t" /* Row 2-3. */ \
+" trn2            v1.2d, v6.2d, v9.2d             \n\t" \
+" trn1            v2.2d, v7.2d, v10.2d            \n\t" \
+" trn2            v3.2d, v7.2d, v10.2d            \n\t" \
+" trn1            v4.2d, v8.2d, v11.2d            \n\t" \
+" trn2            v5.2d, v8.2d, v11.2d            \n\t" \
+"                                                 \n\t" \
+" trn1            v6.2d, v12.2d, v15.2d           \n\t" /* Row 4-5. */ \
+" trn2            v7.2d, v12.2d, v15.2d           \n\t" \
+" trn1            v8.2d, v13.2d, v16.2d           \n\t" \
+" trn2            v9.2d, v13.2d, v16.2d           \n\t" \
+" trn1            v10.2d, v14.2d, v17.2d          \n\t" \
+" trn2            v11.2d, v14.2d, v17.2d          \n\t" \
+"                                                 \n\t" \
+" trn1            v12.2d, v18.2d, v21.2d          \n\t" /* Row 4-5. */ \
+" trn2            v13.2d, v18.2d, v21.2d          \n\t" \
+" trn1            v14.2d, v19.2d, v22.2d          \n\t" \
+" trn2            v15.2d, v19.2d, v22.2d          \n\t" \
+" trn1            v16.2d, v20.2d, v23.2d          \n\t" \
+" trn2            v17.2d, v20.2d, v23.2d          \n\t" \
+"                                                 \n\t" \
+BEQ(ZERO_BETA_R_0_1_ ## PACKA ## _ ## PACKB) \
+DLOADC_4V_C_FWD(18,19,20,21,%[c_ld],0,%[cs_c]) \
+DSCALEA4V(24,0,6,12,18,19,20,21,30,0) \
+DLOADC_4V_C_FWD(18,19,20,21,%[c_ld],0,%[cs_c]) \
+DSCALEA4V(25,1,7,13,18,19,20,21,30,0) \
+LABEL(ZERO_BETA_R_0_1_ ## PACKA ## _ ## PACKB) \
+DSTOREC_4V_C_FWD(24,0,6,12,%[c],0,%[cs_c]) \
+DSTOREC_4V_C_FWD(25,1,7,13,%[c],0,%[cs_c]) \
+BEQ(ZERO_BETA_R_2_3_4_5_ ## PACKA ## _ ## PACKB) \
+DLOADC_4V_C_FWD(18,19,20,21,%[c_ld],0,%[cs_c]) \
+DLOADC_4V_C_FWD(22,23,24,25,%[c_ld],0,%[cs_c]) \
+DSCALEA8V(26,2,8,14,27,3,9,15,18,19,20,21,22,23,24,25,30,0) \
+DLOADC_4V_C_FWD(18,19,20,21,%[c_ld],0,%[cs_c]) \
+DLOADC_4V_C_FWD(22,23,24,25,%[c_ld],0,%[cs_c]) \
+DSCALEA8V(28,4,10,16,29,5,11,17,18,19,20,21,22,23,24,25,30,0) \
+LABEL(ZERO_BETA_R_2_3_4_5_ ## PACKA ## _ ## PACKB) \
+DSTOREC_4V_C_FWD(26,2,8,14,%[c],0,%[cs_c]) \
+DSTOREC_4V_C_FWD(27,3,9,15,%[c],0,%[cs_c]) \
+DSTOREC_4V_C_FWD(28,4,10,16,%[c],0,%[cs_c]) \
+DSTOREC_4V_C_FWD(29,5,11,17,%[c],0,%[cs_c]) \
+/* Done. */ \
+LABEL(DEND_WRITE_MEM_ ## PACKA ## _ ## PACKB) \
+: [a_0]    "+r" (a_0), \
+  [a_1]    "+r" (a_1), \
+  [a_2]    "+r" (a_2), \
+  [a_3]    "+r" (a_3), \
+  [a_4]    "+r" (a_4), \
+  [a_5]    "+r" (a_5), \
+  [a_6]    "+r" (a_6), \
+  [a_7]    "+r" (a_7), \
+  [cs_a]   "+r" (cs_a), \
+  [cs_a2]  "+r" (cs_a_next), \
+  [b]      "+r" (b), \
+  [rs_b]   "+r" (rs_b), \
+  [c]      "+r" (c), \
+  [c_ld]   "+r" (c_ld), \
+  [rs_c]   "+r" (rs_c), \
+  [cs_c]   "+r" (cs_c), \
+  [k_mker] "+r" (k_mker), \
+  [k_left] "+r" (k_left), \
+  [alpha]  "+r" (alpha), \
+  [beta]   "+r" (beta), \
+  [a_next] "+r" (a_next), \
+  [b_next] "+r" (b_next), \
+  [a_p]    "+r" (a_p), \
+  [b_p]    "+r" (b_p) \
+: \
+: /* Clobber all vector registers. */ \
+  "v0","v1","v2","v3","v4","v5","v6","v7", \
+  "v8","v9","v10","v11","v12","v13","v14","v15", \
+  "v16","v17","v18","v19", \
+  "v20","v21","v22","v23", \
+  "v24","v25","v26","v27", \
+  "v28","v29","v30","v31" \
+  ); \
+\
+}
+
+GENDEF(pack,pack)
+GENDEF(pack,nopack)
+GENDEF(nopack,pack)
+GENDEF(nopack,nopack)
+
+#undef DGEMM_8X6_MKER_NOIDX_LOOP
+#undef LOAD_noload
+#undef PACK_nopack
+#undef LOAD_load
+#undef PACK_pack
+#undef DGEMM_STORE1V_nopack
+#undef DGEMM_STORE1V_pack
+#undef DGEMM_LOAD1V_noload
+#undef DGEMM_LOAD1V_load
+#undef GEMM_PRFC_FH_noload
+#undef GEMM_PRFC_LH_FWD_noload
+#undef GEMM_PRFC_FH_load
+#undef GEMM_PRFC_LH_FWD_load
+#undef DGEMM_8X6_MKER_NOIDX_LOOP_LOC
+#undef PRFA_LOC
+#undef DLOADC_3V_R_FWD
+#undef DSTOREC_3V_R_FWD
+#undef DLOADC_4V_C_FWD
+#undef DSTOREC_4V_C_FWD
+#undef GENDEF
+
+#endif
